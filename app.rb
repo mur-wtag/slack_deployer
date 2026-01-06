@@ -143,12 +143,23 @@ post "/slack/deploy" do
   begin
     trigger_github_action(stage: stage, branch: branch)
   rescue => e
+    error_msg = e.message
+
+    formatted_error = if error_msg.include?("401")
+                        "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_TOKEN` configuration."
+                      elsif error_msg.include?("404")
+                        "❌ *Not Found*\n\nCouldn't find the repository or workflow.\nPlease verify:\n• Repo: `#{ENV['GITHUB_REPO']}`\n• Workflow: `#{ENV['GITHUB_WORKFLOW']}`"
+                      elsif error_msg.include?("403")
+                        "❌ *Permission Denied*\n\nThe GitHub token doesn't have permission to trigger workflows.\nMake sure the token has `workflow` scope."
+                      else
+                        "❌ *Deployment Failed*\n\n```#{error_msg}```"
+                      end
+
     return json(
       {
         response_type: "ephemeral",
-        text: "Deployment failed to start.\n#{e.message}"
-      },
-      # status: 500
+        text: formatted_error
+      }
     )
   end
 
