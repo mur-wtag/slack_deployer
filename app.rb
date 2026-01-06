@@ -6,8 +6,8 @@ require "faraday"
 require "dotenv/load"
 require "openssl"
 require "rack/utils"
+require "stringio"
 
-# set :protection, false
 set :bind, "0.0.0.0"
 set :port, ENV.fetch("PORT", 4567)
 
@@ -20,9 +20,9 @@ end
 # Configuration
 # -----------------------------
 
-ALLOWED_TEAM_IDS = %w[C093R1STRHT].freeze # teetime
+ALLOWED_TEAM_IDS = %w[T0D62LCBV].freeze
 ALLOWED_STAGES = %w[staging_one staging_two staging_three].freeze
-REQUEST_TTL_SECONDS = 300 # 5 minutes
+REQUEST_TTL_SECONDS = 300
 
 # -----------------------------
 # Helpers
@@ -34,24 +34,25 @@ helpers do
     halt status, body.to_json
   end
 
-  # ---- Slack Authentication ----
-  def verify_slack_request!
-    # halt 403 unless ALLOWED_TEAM_IDS.include?(params[:team_id])
+  def verify_slack_request!(team_id)
+    halt 403 unless ALLOWED_TEAM_IDS.include?(team_id)
 
     timestamp = request.env["HTTP_X_SLACK_REQUEST_TIMESTAMP"]
     signature = request.env["HTTP_X_SLACK_SIGNATURE"]
+    raw_body = request.env["rack.input.raw"]
+
+    puts "Timestamp: #{timestamp}"
+    puts "Signature: #{signature}"
+    puts "Raw body from env: #{raw_body.inspect}"
 
     halt 401, "Missing Slack headers" unless timestamp && signature
+    halt 401, "Missing raw body" unless raw_body
 
-    # Prevent replay attacks
     if (Time.now.to_i - timestamp.to_i).abs > REQUEST_TTL_SECONDS
       halt 401, "Stale Slack request"
     end
 
-    body = request.body.read
-    request.body.rewind
-
-    basestring = "v0:#{timestamp}:#{body}"
+    basestring = "v0:#{timestamp}:#{raw_body}"
     digest = OpenSSL::HMAC.hexdigest(
       "SHA256",
       ENV.fetch("SLACK_SIGNING_SECRET"),
@@ -65,7 +66,6 @@ helpers do
     end
   end
 
-  # ---- GitHub Client ----
   def github_client
     @github_client ||= Faraday.new(
       url: "https://api.github.com",
@@ -78,7 +78,6 @@ helpers do
     )
   end
 
-  # ---- Trigger GitHub Actions ----
   def trigger_github_action(stage:, branch:)
     response = github_client.post do |req|
       req.url "/repos/#{ENV.fetch("GITHUB_REPO")}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
@@ -107,7 +106,7 @@ get "/" do
 end
 
 post "/slack/deploy" do
-  verify_slack_request!
+  verify_slack_request!(params[:team_id])
 
   text = params[:text].to_s.strip
   stage, branch = text.split(/\s+/, 2)
@@ -127,7 +126,7 @@ post "/slack/deploy" do
         response_type: "ephemeral",
         text: "Invalid stage. Allowed stages: #{ALLOWED_STAGES.join(', ')}"
       },
-      status: 403
+      # status: 403
     )
   end
 
@@ -137,7 +136,7 @@ post "/slack/deploy" do
         response_type: "ephemeral",
         text: "Invalid branch name."
       },
-      status: 400
+      # status: 400
     )
   end
 
@@ -149,7 +148,7 @@ post "/slack/deploy" do
         response_type: "ephemeral",
         text: "Deployment failed to start.\n#{e.message}"
       },
-      status: 500
+      # status: 500
     )
   end
 
