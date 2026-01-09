@@ -145,6 +145,8 @@ post "/slack/deploy" do
   rescue => e
     error_msg = e.message
 
+    p error_msg
+
     formatted_error = if error_msg.include?("401")
                         "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_TOKEN` configuration."
                       elsif error_msg.include?("404")
