@@ -82,7 +82,7 @@ helpers do
     response = github_client.post do |req|
       req.url "/repos/#{ENV.fetch("GITHUB_REPO")}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
       req.body = {
-        ref: "main",
+        ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", "main")}",
         inputs: {
           stage: stage,
           branch: branch
