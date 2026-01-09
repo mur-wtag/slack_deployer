@@ -41,10 +41,6 @@ helpers do
     signature = request.env["HTTP_X_SLACK_SIGNATURE"]
     raw_body = request.env["rack.input.raw"]
 
-    puts "Timestamp: #{timestamp}"
-    puts "Signature: #{signature}"
-    puts "Raw body from env: #{raw_body.inspect}"
-
     halt 401, "Missing Slack headers" unless timestamp && signature
     halt 401, "Missing raw body" unless raw_body
 
@@ -79,15 +75,19 @@ helpers do
   end
 
   def trigger_github_action(stage:, branch:)
+    request_body = {
+      ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", "main")}",
+      inputs: {
+        stage: stage,
+        branch: branch
+      }
+    }.to_json
+
+    p "request body: #{request_body}"
+
     response = github_client.post do |req|
       req.url "/repos/#{ENV.fetch("GITHUB_REPO")}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
-      req.body = {
-        ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", "main")}",
-        inputs: {
-          stage: stage,
-          branch: branch
-        }
-      }.to_json
+      req.body = request_body
     end
 
     return if response.success?
