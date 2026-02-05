@@ -20,8 +20,10 @@ end
 # Configuration
 # -----------------------------
 
+GITHUB_REPO_PREFIX="teetime-co-jp"
 ALLOWED_TEAM_IDS = %w[T0D62LCBV].freeze
-ALLOWED_STAGES = %w[staging_one staging_two staging_three].freeze
+ALLOWED_REPOS = %w[firstee golfee].freeze
+ALLOWED_STAGES = %w[staging staging_one staging_two staging_three].freeze
 REQUEST_TTL_SECONDS = 300
 
 # -----------------------------
@@ -74,7 +76,7 @@ helpers do
     )
   end
 
-  def trigger_github_action(stage:, branch:)
+  def trigger_github_action(repo:, stage:, branch:)
     request_body = {
       ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", "main")}",
       inputs: {
@@ -85,8 +87,9 @@ helpers do
 
     p "request body: #{request_body}"
 
+    url = "/repos/#{GITHUB_REPO_PREFIX}/#{repo}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
     response = github_client.post do |req|
-      req.url "/repos/#{ENV.fetch("GITHUB_REPO")}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
+      req.url url
       req.body = request_body
     end
 
@@ -102,22 +105,32 @@ end
 
 get "/" do
   status 200
-  "OK"
+  "OK v2"
 end
 
 post "/slack/deploy" do
   verify_slack_request!(params[:team_id])
 
   text = params[:text].to_s.strip
-  stage, branch = text.split(/\s+/, 2)
+  repo, stage, branch = text.split(/\s+/, 3)
 
-  unless stage && branch
+  unless repo && stage && branch
     return json(
       {
         response_type: "ephemeral",
-        text: "Usage: /deploy <stage> <branch>\nExample: /deploy staging_two main"
+        text: "Usage: /deploy <repo> <stage> <branch>\nExample: /deploy golfee staging_two main"
       }
     )
+  end
+
+  unless ALLOWED_REPOS.include?(repo)
+    return json(
+      {
+        response_type: "ephemeral",
+        text: "Invalid stage. Allowed stages: #{ALLOWED_REPOS.join(', ')}"
+      },
+    # status: 403
+      )
   end
 
   unless ALLOWED_STAGES.include?(stage)
@@ -126,8 +139,8 @@ post "/slack/deploy" do
         response_type: "ephemeral",
         text: "Invalid stage. Allowed stages: #{ALLOWED_STAGES.join(', ')}"
       },
-      # status: 403
-    )
+    # status: 403
+      )
   end
 
   unless branch.match?(/\A[\w\-\/\.]+\z/)
@@ -136,19 +149,19 @@ post "/slack/deploy" do
         response_type: "ephemeral",
         text: "Invalid branch name."
       },
-      # status: 400
-    )
+    # status: 400
+      )
   end
 
   begin
-    trigger_github_action(stage: stage, branch: branch)
+    trigger_github_action(repo: repo, stage: stage, branch: branch)
   rescue => e
     error_msg = e.message
 
     p error_msg
 
     formatted_error = if error_msg.include?("401")
-                        "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_TOKEN` configuration."
+                        "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_<repo>_TOKEN` configuration."
                       elsif error_msg.include?("404")
                         "❌ *Not Found*\n\nCouldn't find the repository or workflow.\nPlease verify:\n• Repo: `#{ENV['GITHUB_REPO']}`\n• Workflow: `#{ENV['GITHUB_WORKFLOW']}`"
                       elsif error_msg.include?("403")
@@ -170,6 +183,7 @@ post "/slack/deploy" do
       response_type: "in_channel",
       text: <<~MSG.strip
         🚀 Deployment started
+        • Repo: `#{repo}`
         • Stage: `#{stage}`
         • Branch: `#{branch}`
         • Triggered by: <@#{params[:user_id]}>
