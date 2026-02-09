@@ -23,6 +23,10 @@ end
 GITHUB_REPO_PREFIX="teetime-co-jp"
 ALLOWED_TEAM_IDS = %w[T0D62LCBV].freeze
 ALLOWED_REPOS = %w[firstee golfee].freeze
+TRIGGERED_BRANCH = {
+  "firstee" => "master",
+  "golfee" => "main"
+}
 ALLOWED_STAGES = %w[staging staging_one staging_two staging_three].freeze
 REQUEST_TTL_SECONDS = 300
 
@@ -78,7 +82,7 @@ helpers do
 
   def trigger_github_action(repo:, stage:, branch:)
     request_body = {
-      ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", "main")}",
+      ref: "#{ENV.fetch("GITHUB_TRIGGER_BRANCH", TRIGGERED_BRANCH[repo])}",
       inputs: {
         stage: stage,
         branch: branch
