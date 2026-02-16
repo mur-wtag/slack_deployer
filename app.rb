@@ -22,7 +22,7 @@ end
 
 GITHUB_REPO_PREFIX="teetime-co-jp"
 ALLOWED_TEAM_IDS = %w[T0D62LCBV].freeze
-ALLOWED_REPOS = %w[firstee golfee].freeze
+ALLOWED_REPOS = %w[firstee golfee greentee].freeze
 TRIGGERED_BRANCH = {
   "firstee" => "master",
   "golfee" => "main"
@@ -165,7 +165,7 @@ post "/slack/deploy" do
     p error_msg
 
     formatted_error = if error_msg.include?("401")
-                        "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_TOKEN` configuration."
+                        "❌ *Authentication Failed*\n\nThe GitHub token appears to be invalid or expired.\nPlease check your `GITHUB_<repo>_TOKEN` configuration."
                       elsif error_msg.include?("404")
                         "❌ *Not Found*\n\nCouldn't find the repository or workflow.\nPlease verify:\n• Repo: `#{ENV['GITHUB_REPO']}`\n• Workflow: `#{ENV['GITHUB_WORKFLOW']}`"
                       elsif error_msg.include?("403")
