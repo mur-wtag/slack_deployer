@@ -91,9 +91,9 @@ helpers do
       }
     }.to_json
 
-    p "request body: #{request_body}"
-
     url = "/repos/#{GITHUB_REPO_PREFIX}/#{repo}/actions/workflows/#{ENV.fetch("GITHUB_WORKFLOW")}/dispatches"
+    p "Dispatching to #{url}"
+    p "request body: #{request_body}"
     response = github_client.post do |req|
       req.url url
       req.body = request_body
@@ -165,7 +165,6 @@ post "/slack/deploy" do
     trigger_github_action(repo: repo, stage: stage, branch: branch)
   rescue => e
     error_msg = e.message
-
     p error_msg
 
     formatted_error = if error_msg.include?("401")
